@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api\V1;
 use App\Http\Controllers\Controller;
 use App\Models\AuditLog;
 use App\Models\Customer;
+use App\Models\Invoice;
 use App\Services\AuditLogger;
 use App\Services\TenantContext;
 use App\Traits\ApiResponse;
@@ -72,7 +73,14 @@ class CustomerController extends Controller
      */
     public function show(Customer $customer): JsonResponse
     {
-        return $this->successResponse($customer, 'Customer details retrieved.');
+        $outstandingBalance = (float) Invoice::where('customer_id', $customer->id)
+            ->whereIn('status', ['unpaid', 'partially_paid'])
+            ->sum('due_amount');
+
+        $data = $customer->toArray();
+        $data['outstanding_balance'] = $outstandingBalance;
+
+        return $this->successResponse($data, 'Customer details retrieved.');
     }
 
     /**
@@ -128,14 +136,35 @@ class CustomerController extends Controller
             ->orderBy('created_at', 'desc')
             ->get();
 
+        $outstandingBalance = (float) Invoice::where('customer_id', $customer->id)
+            ->whereIn('status', ['unpaid', 'partially_paid'])
+            ->sum('due_amount');
+
         return $this->successResponse([
             'customer' => $customer,
             'stats' => [
                 'total_bookings' => 0,
                 'total_spent' => 0.00,
+                'outstanding_balance' => $outstandingBalance,
                 'joined_at' => $customer->created_at->toIso8601String(),
             ],
             'recent_activity' => $auditLogs,
         ], 'Customer profile history retrieved.');
+    }
+
+    /**
+     * Get customer outstanding balance.
+     */
+    public function outstandingBalance(Customer $customer): JsonResponse
+    {
+        $outstandingBalance = (float) Invoice::where('customer_id', $customer->id)
+            ->whereIn('status', ['unpaid', 'partially_paid'])
+            ->sum('due_amount');
+
+        return $this->successResponse([
+            'customer_id' => $customer->id,
+            'customer_name' => $customer->name,
+            'outstanding_balance' => $outstandingBalance,
+        ], 'Customer outstanding balance calculated.');
     }
 }

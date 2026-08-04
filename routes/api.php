@@ -4,8 +4,13 @@ use App\Http\Controllers\Api\V1\AuthController;
 use App\Http\Controllers\Api\V1\AuditLogController;
 use App\Http\Controllers\Api\V1\BookingController;
 use App\Http\Controllers\Api\V1\CustomerController;
+use App\Http\Controllers\Api\V1\DailyClosingController;
+use App\Http\Controllers\Api\V1\DashboardController;
 use App\Http\Controllers\Api\V1\EmployeeController;
+use App\Http\Controllers\Api\V1\ExpenseController;
+use App\Http\Controllers\Api\V1\InvoiceController;
 use App\Http\Controllers\Api\V1\OnboardingController;
+use App\Http\Controllers\Api\V1\ReportController;
 use App\Http\Controllers\Api\V1\ServiceController;
 use App\Http\Controllers\Api\V1\TenantController;
 use App\Http\Middleware\EnsureTenantContext;
@@ -35,6 +40,7 @@ Route::prefix('v1')->group(function () {
 
         // Customer Catalog & History
         Route::get('/customers/{customer}/history', [CustomerController::class, 'history']);
+        Route::get('/customers/{customer}/outstanding-balance', [CustomerController::class, 'outstandingBalance']);
         Route::apiResource('customers', CustomerController::class);
 
         // Services Catalog
@@ -51,5 +57,26 @@ Route::prefix('v1')->group(function () {
         Route::patch('/bookings/{booking}/status', [BookingController::class, 'updateStatus']);
         Route::post('/bookings/{booking}/cancel', [BookingController::class, 'cancel']);
         Route::apiResource('bookings', BookingController::class);
+
+        // Billing and Payment Endpoints
+        Route::post('/invoices/{invoice}/payments', [InvoiceController::class, 'recordPayment']);
+        Route::get('/invoices/{invoice}/pdf', [InvoiceController::class, 'pdf']);
+        Route::apiResource('invoices', InvoiceController::class);
+
+        // Expenses CRUD
+        Route::apiResource('expenses', ExpenseController::class);
+
+        // Daily Closings & Reconciliation
+        Route::get('/daily-closings', [DailyClosingController::class, 'index']);
+        Route::post('/daily-closings/calculate', [DailyClosingController::class, 'calculate']);
+        Route::post('/daily-closings/close', [DailyClosingController::class, 'close']);
+
+        // Dashboard Summary KPIs
+        Route::get('/dashboard/summary', [DashboardController::class, 'summary']);
+
+        // Financial Reports
+        Route::get('/reports/sales', [ReportController::class, 'sales']);
+        Route::get('/reports/pnl', [ReportController::class, 'pnl']);
+        Route::get('/reports/outstanding', [ReportController::class, 'outstanding']);
     });
 });
