@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Api\V1\AuthController;
 use App\Http\Controllers\Api\V1\AuditLogController;
+use App\Http\Controllers\Api\V1\BookingController;
 use App\Http\Controllers\Api\V1\CustomerController;
 use App\Http\Controllers\Api\V1\EmployeeController;
 use App\Http\Controllers\Api\V1\OnboardingController;
@@ -42,5 +43,13 @@ Route::prefix('v1')->group(function () {
         // Employee Master Records & Skills Matrix
         Route::post('/employees/{employee}/skills', [EmployeeController::class, 'syncSkills']);
         Route::apiResource('employees', EmployeeController::class);
+
+        // Booking Engine & Calendar Endpoints
+        Route::get('/bookings/available-slots', [BookingController::class, 'availableSlots']);
+        Route::get('/bookings/calendar', [BookingController::class, 'calendar']);
+        Route::patch('/bookings/{booking}/reschedule', [BookingController::class, 'reschedule']);
+        Route::patch('/bookings/{booking}/status', [BookingController::class, 'updateStatus']);
+        Route::post('/bookings/{booking}/cancel', [BookingController::class, 'cancel']);
+        Route::apiResource('bookings', BookingController::class);
     });
 });
