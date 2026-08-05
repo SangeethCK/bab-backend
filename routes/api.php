@@ -27,6 +27,8 @@ Route::prefix('v1')->group(function () {
     // Public / Authentication & Onboarding Routes
     Route::post('/onboard', [OnboardingController::class, 'onboard']);
     Route::post('/auth/login', [AuthController::class, 'login']);
+    Route::post('/auth/customer/send-otp', [AuthController::class, 'sendCustomerOtp']);
+    Route::post('/auth/customer/verify-otp', [AuthController::class, 'verifyCustomerOtp']);
     Route::post('/auth/forgot-password', [AuthController::class, 'forgotPassword']);
     Route::post('/auth/reset-password', [AuthController::class, 'resetPassword']);
 

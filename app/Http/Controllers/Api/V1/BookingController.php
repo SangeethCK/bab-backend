@@ -56,6 +56,33 @@ class BookingController extends Controller
      */
     public function store(Request $request): JsonResponse
     {
+        $customerId = $request->input('customer_id');
+
+        // Auto-resolve Customer record for authenticated user if customer_id is missing or invalid
+        if (!$customerId || !\App\Models\Customer::where('id', $customerId)->exists()) {
+            $user = $request->user();
+            if ($user) {
+                $customer = \App\Models\Customer::where('email', $user->email)
+                    ->orWhere('mobile', $user->phone)
+                    ->first();
+
+                if (!$customer) {
+                    $tenantId = \App\Services\TenantContext::getTenantId() ?? $user->tenant_id;
+                    $customer = \App\Models\Customer::create([
+                        'tenant_id' => $tenantId,
+                        'customer_code' => \App\Models\Customer::generateNextCustomerCode($tenantId),
+                        'name' => $user->name,
+                        'email' => $user->email,
+                        'mobile' => $user->phone ?? '+1555000111',
+                    ]);
+                }
+
+                if ($customer) {
+                    $request->merge(['customer_id' => $customer->id]);
+                }
+            }
+        }
+
         $validated = $request->validate([
             'customer_id' => 'required|exists:customers,id',
             'employee_id' => 'required|exists:employees,id',

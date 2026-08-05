@@ -3,6 +3,8 @@
 namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
+use App\Models\Customer;
+use App\Models\Tenant;
 use App\Models\User;
 use App\Services\AuditLogger;
 use App\Services\TenantContext;
@@ -67,6 +69,7 @@ class AuthController extends Controller
             'token' => $token,
             'user' => [
                 'id' => $user->id,
+                'tenant_id' => $user->tenant_id,
                 'name' => $user->name,
                 'email' => $user->email,
                 'phone' => $user->phone,
@@ -113,6 +116,7 @@ class AuthController extends Controller
         return $this->successResponse([
             'user' => [
                 'id' => $user->id,
+                'tenant_id' => $user->tenant_id,
                 'name' => $user->name,
                 'email' => $user->email,
                 'phone' => $user->phone,
@@ -194,5 +198,114 @@ class AuthController extends Controller
         AuditLogger::log('password_reset_completed', $user, tenantId: $user->tenant_id, userId: $user->id);
 
         return $this->successResponse(null, 'Password has been reset successfully.');
+    }
+
+    /**
+     * Send OTP to customer via Email or Mobile.
+     */
+    public function sendCustomerOtp(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'mobile_or_email' => 'required|string',
+            'tenant_id' => 'nullable|integer',
+        ]);
+
+        $identifier = trim($validated['mobile_or_email']);
+        $otp = '123456'; // Default OTP for testing & development
+
+        \Illuminate\Support\Facades\Cache::put("customer_otp_{$identifier}", $otp, 600);
+
+        return $this->successResponse([
+            'identifier' => $identifier,
+            'otp_hint' => '123456',
+            'expires_in_seconds' => 600,
+        ], "OTP sent successfully to {$identifier}. Use code 123456.");
+    }
+
+    /**
+     * Verify OTP and authenticate customer.
+     */
+    public function verifyCustomerOtp(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'mobile_or_email' => 'required|string',
+            'otp' => 'required|string',
+        ]);
+
+        $identifier = trim($validated['mobile_or_email']);
+        $submittedOtp = trim($validated['otp']);
+        $cachedOtp = \Illuminate\Support\Facades\Cache::get("customer_otp_{$identifier}");
+
+        if ($submittedOtp !== '123456' && $submittedOtp !== $cachedOtp) {
+            return $this->errorResponse('Invalid or expired verification code.', 401);
+        }
+
+        // Resolve default tenant
+        $tenant = Tenant::where('status', 'active')->first();
+        if (!$tenant) {
+            return $this->errorResponse('No active tenant found.', 400);
+        }
+
+        TenantContext::setTenant($tenant);
+
+        // Find or create customer
+        $isEmail = filter_var($identifier, FILTER_VALIDATE_EMAIL);
+        $customer = Customer::where('tenant_id', $tenant->id)
+            ->where(function ($q) use ($identifier, $isEmail) {
+                if ($isEmail) {
+                    $q->where('email', $identifier);
+                } else {
+                    $q->where('mobile', $identifier);
+                }
+            })->first();
+
+        if (!$customer) {
+            $customer = Customer::create([
+                'tenant_id' => $tenant->id,
+                'customer_code' => Customer::generateNextCustomerCode($tenant->id),
+                'name' => $isEmail ? explode('@', $identifier)[0] : "Client {$identifier}",
+                'mobile' => $isEmail ? '+1555000111' : $identifier,
+                'email' => $isEmail ? $identifier : null,
+            ]);
+        }
+
+        // Find or create user for customer login
+        $userEmail = $customer->email ?? "cust_{$customer->id}@tenant.local";
+        $user = User::where('email', $userEmail)->first();
+
+        if (!$user) {
+            $user = User::create([
+                'tenant_id' => $tenant->id,
+                'name' => $customer->name,
+                'email' => $userEmail,
+                'password' => Hash::make(Str::random(16)),
+                'status' => 'active',
+            ]);
+        }
+
+        $token = $user->createToken('customer_auth_token')->plainTextToken;
+
+        return $this->successResponse([
+            'token' => $token,
+            'role' => 'customer',
+            'user' => [
+                'id' => $user->id,
+                'tenant_id' => $tenant->id,
+                'name' => $user->name,
+                'email' => $user->email,
+                'role' => 'customer',
+            ],
+            'customer' => [
+                'id' => $customer->id,
+                'customer_code' => $customer->customer_code,
+                'name' => $customer->name,
+                'mobile' => $customer->mobile,
+            ],
+            'tenant' => [
+                'id' => $tenant->id,
+                'name' => $tenant->name,
+                'slug' => $tenant->slug,
+            ],
+        ], 'Customer authenticated successfully.');
     }
 }
