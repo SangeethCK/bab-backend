@@ -45,13 +45,24 @@ class ReportService
         // 5. Active Employees Count
         $activeEmployeesCount = Employee::where('status', 'active')->count();
 
+        // 6. Live / Recent Bookings list for Dashboard
+        $recentBookings = Booking::with(['customer', 'employee', 'service'])
+            ->orderBy('start_time', 'desc')
+            ->limit(30)
+            ->get();
+
         return [
             'today_date' => $today,
             'todays_bookings' => $bookingStats,
+            'today_bookings' => $bookingStats['total'],
             'todays_sales' => $todaysSales,
+            'total_sales' => $todaysSales,
+            'total_customers' => Customer::count(),
             'total_outstanding_balance' => $totalOutstanding,
+            'pending_amount' => $totalOutstanding,
             'current_cash_balance' => $currentCashBalance,
             'active_employees_count' => $activeEmployeesCount,
+            'recent_bookings' => $recentBookings,
         ];
     }
 

@@ -21,6 +21,9 @@ class Employee extends Model
         'email',
         'phone',
         'designation',
+        'work_start_time',
+        'work_end_time',
+        'max_concurrent_bookings',
         'status',
     ];
 

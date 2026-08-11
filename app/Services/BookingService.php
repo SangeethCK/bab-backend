@@ -35,41 +35,49 @@ class BookingService
             return [];
         }
 
-        $businessStart = Carbon::parse("{$date} 09:00:00");
-        $businessEnd = Carbon::parse("{$date} 18:00:00");
-
         $availableSlots = [];
 
         foreach ($employees as $employee) {
+            $workStartStr = $employee->work_start_time ?? '08:00:00';
+            $workEndStr = $employee->work_end_time ?? '21:00:00';
+
+            $empStart = Carbon::parse("{$date} {$workStartStr}");
+            $empEnd = Carbon::parse("{$date} {$workEndStr}");
+
             $pivot = $employee->services()->where('service_id', $serviceId)->first()?->pivot;
             $duration = $pivot?->custom_duration_minutes ?? $service->duration_minutes;
             $price = $pivot?->custom_price ?? $service->price;
 
-            $currentSlot = $businessStart->copy();
+            $currentSlot = $empStart->copy();
 
-            while ($currentSlot->copy()->addMinutes($duration)->lte($businessEnd)) {
+            while ($currentSlot->copy()->addMinutes($duration)->lte($empEnd)) {
                 $slotStart = $currentSlot->copy();
                 $slotEnd = $currentSlot->copy()->addMinutes($duration);
 
-                // Check for overlapping active bookings for this employee
-                $hasOverlap = Booking::where('employee_id', $employee->id)
+                // Check active bookings count against employee max_concurrent_bookings capacity
+                $maxCapacity = $employee->max_concurrent_bookings ?? 1;
+                $overlappingCount = Booking::where('employee_id', $employee->id)
                     ->whereIn('status', ['scheduled', 'checked_in', 'in_progress'])
                     ->where(function ($q) use ($slotStart, $slotEnd) {
                         $q->where('start_time', '<', $slotEnd)
                           ->where('end_time', '>', $slotStart);
                     })
-                    ->exists();
+                    ->count();
 
-                if (!$hasOverlap) {
-                    $availableSlots[] = [
-                        'employee_id' => $employee->id,
-                        'employee_name' => trim("{$employee->first_name} {$employee->last_name}"),
-                        'start_time' => $slotStart->toIso8601String(),
-                        'end_time' => $slotEnd->toIso8601String(),
-                        'duration_minutes' => $duration,
-                        'price' => (float) $price,
-                    ];
-                }
+                $isAvailable = $overlappingCount < $maxCapacity;
+
+                $availableSlots[] = [
+                    'employee_id' => $employee->id,
+                    'employee_name' => trim("{$employee->first_name} {$employee->last_name}"),
+                    'start_time' => $slotStart->toIso8601String(),
+                    'end_time' => $slotEnd->toIso8601String(),
+                    'duration_minutes' => $duration,
+                    'price' => (float) $price,
+                    'available' => $isAvailable,
+                    'status' => $isAvailable ? 'available' : 'booked',
+                    'active_count' => $overlappingCount,
+                    'max_capacity' => $maxCapacity,
+                ];
 
                 $currentSlot->addMinutes(30); // 30-minute interval step
             }
@@ -79,7 +87,7 @@ class BookingService
     }
 
     /**
-     * Create a new booking with database-level double-booking prevention.
+     * Create a new booking with database-level double-booking prevention and shift check.
      */
     public function createBooking(array $data): Booking
     {
@@ -95,18 +103,34 @@ class BookingService
             $startTime = Carbon::parse($data['start_time']);
             $endTime = $startTime->copy()->addMinutes($duration);
 
-            // Double Booking Prevention: Pessimistic Lock & Overlap Check
-            $overlappingBooking = Booking::where('employee_id', $employee->id)
+            // Employee Working Hours / Shift Check (timezone-aware)
+            $tz = $startTime->getTimezone();
+            $dateStr = $startTime->format('Y-m-d');
+            $workStartStr = $employee->work_start_time ?? '08:00:00';
+            $workEndStr = $employee->work_end_time ?? '21:00:00';
+
+            $shiftStart = Carbon::parse("{$dateStr} {$workStartStr}", $tz);
+            $shiftEnd = Carbon::parse("{$dateStr} {$workEndStr}", $tz);
+
+            if ($startTime->lt($shiftStart) || $endTime->gt($shiftEnd)) {
+                $formattedWorkStart = Carbon::parse($workStartStr)->format('H:i');
+                $formattedWorkEnd = Carbon::parse($workEndStr)->format('H:i');
+                throw new \InvalidArgumentException("Requested booking time is outside employee working hours ({$formattedWorkStart} - {$formattedWorkEnd}).");
+            }
+
+            // Capacity Check: Pessimistic Lock & Max Concurrent Capacity Validation
+            $maxCapacity = $employee->max_concurrent_bookings ?? 1;
+            $overlappingCount = Booking::where('employee_id', $employee->id)
                 ->whereIn('status', ['scheduled', 'checked_in', 'in_progress'])
                 ->where(function ($q) use ($startTime, $endTime) {
                     $q->where('start_time', '<', $endTime)
                       ->where('end_time', '>', $startTime);
                 })
                 ->lockForUpdate()
-                ->first();
+                ->count();
 
-            if ($overlappingBooking) {
-                throw new \InvalidArgumentException("Double booking conflict: Employee {$employee->first_name} is already booked from {$overlappingBooking->start_time->format('H:i')} to {$overlappingBooking->end_time->format('H:i')}.");
+            if ($overlappingCount >= $maxCapacity) {
+                throw new \InvalidArgumentException("Employee {$employee->first_name} has reached maximum concurrent booking capacity ({$maxCapacity}) for this time slot.");
             }
 
             $bookingCode = Booking::generateNextBookingCode($tenantId);
@@ -154,8 +178,24 @@ class BookingService
             $newStart = Carbon::parse($newStartTimeStr);
             $newEnd = $newStart->copy()->addMinutes($duration);
 
-            // Double Booking check excluding current booking ID
-            $overlappingBooking = Booking::where('employee_id', $employeeId)
+            // Employee Working Hours / Shift Check (timezone-aware)
+            $tz = $newStart->getTimezone();
+            $dateStr = $newStart->format('Y-m-d');
+            $workStartStr = $employee->work_start_time ?? '08:00:00';
+            $workEndStr = $employee->work_end_time ?? '21:00:00';
+
+            $shiftStart = Carbon::parse("{$dateStr} {$workStartStr}", $tz);
+            $shiftEnd = Carbon::parse("{$dateStr} {$workEndStr}", $tz);
+
+            if ($newStart->lt($shiftStart) || $newEnd->gt($shiftEnd)) {
+                $formattedWorkStart = Carbon::parse($workStartStr)->format('H:i');
+                $formattedWorkEnd = Carbon::parse($workEndStr)->format('H:i');
+                throw new \InvalidArgumentException("Target booking time is outside employee working hours ({$formattedWorkStart} - {$formattedWorkEnd}).");
+            }
+
+            // Concurrent capacity check excluding current booking ID
+            $maxCapacity = $employee->max_concurrent_bookings ?? 1;
+            $overlappingCount = Booking::where('employee_id', $employeeId)
                 ->where('id', '!=', $booking->id)
                 ->whereIn('status', ['scheduled', 'checked_in', 'in_progress'])
                 ->where(function ($q) use ($newStart, $newEnd) {
@@ -163,10 +203,10 @@ class BookingService
                       ->where('end_time', '>', $newStart);
                 })
                 ->lockForUpdate()
-                ->first();
+                ->count();
 
-            if ($overlappingBooking) {
-                throw new \InvalidArgumentException("Double booking conflict: Target slot overlaps with existing booking {$overlappingBooking->booking_code}.");
+            if ($overlappingCount >= $maxCapacity) {
+                throw new \InvalidArgumentException("Target time slot has reached maximum concurrent capacity ({$maxCapacity}) for this employee.");
             }
 
             $oldValues = $booking->toArray();

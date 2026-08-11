@@ -58,29 +58,41 @@ class BookingController extends Controller
     {
         $customerId = $request->input('customer_id');
 
-        // Auto-resolve Customer record for authenticated user if customer_id is missing or invalid
+        // Auto-resolve or create Customer record for guest or authenticated user
         if (!$customerId || !\App\Models\Customer::where('id', $customerId)->exists()) {
             $user = $request->user();
             if ($user) {
                 $customer = \App\Models\Customer::where('email', $user->email)
                     ->orWhere('mobile', $user->phone)
                     ->first();
+            } else {
+                $phone = $request->input('customer_phone') ?? $request->input('phone') ?? '9876543210';
+                $name = $request->input('customer_name') ?? $request->input('name') ?? 'Valued Customer';
+                $email = $request->input('customer_email') ?? $request->input('email');
+                $tenantId = \App\Services\TenantContext::getTenantId();
 
+                $customer = \App\Models\Customer::where('mobile', $phone)->first();
                 if (!$customer) {
-                    $tenantId = \App\Services\TenantContext::getTenantId() ?? $user->tenant_id;
                     $customer = \App\Models\Customer::create([
                         'tenant_id' => $tenantId,
                         'customer_code' => \App\Models\Customer::generateNextCustomerCode($tenantId),
-                        'name' => $user->name,
-                        'email' => $user->email,
-                        'mobile' => $user->phone ?? '+1555000111',
+                        'name' => $name,
+                        'email' => $email,
+                        'mobile' => $phone,
                     ]);
                 }
-
-                if ($customer) {
-                    $request->merge(['customer_id' => $customer->id]);
-                }
             }
+
+            if (isset($customer) && $customer) {
+                $request->merge(['customer_id' => $customer->id]);
+            }
+        }
+
+        // Auto-format start_time from booking_date and booking_time if missing
+        if (!$request->has('start_time') && $request->has('booking_date') && $request->has('booking_time')) {
+            $timeStr = $request->input('booking_time');
+            if (strlen($timeStr) === 5) $timeStr .= ':00';
+            $request->merge(['start_time' => $request->input('booking_date') . ' ' . $timeStr]);
         }
 
         $validated = $request->validate([

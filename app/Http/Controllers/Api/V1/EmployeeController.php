@@ -37,6 +37,32 @@ class EmployeeController extends Controller
         $employees = $query->orderBy('first_name', 'asc')
             ->paginate($request->get('per_page', 15));
 
+        $employees->getCollection()->transform(function ($employee) {
+            $activeBooking = \App\Models\Booking::where('employee_id', $employee->id)
+                ->whereIn('status', ['in_progress', 'checked_in'])
+                ->where('end_time', '>', now())
+                ->orderBy('start_time', 'asc')
+                ->first();
+
+            $isBusy = $activeBooking !== null;
+            $remainingMinutes = 0;
+            $liveStatusDisplay = '🟢 Available Now';
+            $nextAvailableSlotTime = null;
+
+            if ($isBusy && $activeBooking) {
+                $remainingMinutes = (int) max(0, ceil(now()->diffInMinutes($activeBooking->end_time, false)));
+                $liveStatusDisplay = "✂️ Serving Client (Free in {$remainingMinutes}m)";
+                $nextAvailableSlotTime = $activeBooking->end_time->format('H:i');
+            }
+
+            $employee->is_busy = $isBusy;
+            $employee->remaining_minutes = $remainingMinutes;
+            $employee->live_status_display = $liveStatusDisplay;
+            $employee->next_available_slot_time = $nextAvailableSlotTime;
+
+            return $employee;
+        });
+
         return $this->successResponse($employees, 'Employees retrieved successfully.');
     }
 
@@ -52,6 +78,9 @@ class EmployeeController extends Controller
             'email' => 'nullable|email|max:255',
             'phone' => 'required|string|max:50',
             'designation' => 'nullable|string|max:255',
+            'work_start_time' => 'nullable|date_format:H:i,H:i:s',
+            'work_end_time' => 'nullable|date_format:H:i,H:i:s',
+            'max_concurrent_bookings' => 'nullable|integer|min:1|max:10',
             'status' => 'nullable|in:active,inactive',
             'services' => 'nullable|array',
             'services.*.service_id' => 'required|exists:services,id',
@@ -66,6 +95,9 @@ class EmployeeController extends Controller
             'email' => $validated['email'] ?? null,
             'phone' => $validated['phone'],
             'designation' => $validated['designation'] ?? null,
+            'work_start_time' => $validated['work_start_time'] ?? '08:00:00',
+            'work_end_time' => $validated['work_end_time'] ?? '21:00:00',
+            'max_concurrent_bookings' => $validated['max_concurrent_bookings'] ?? 1,
             'status' => $validated['status'] ?? 'active',
         ]);
 
@@ -94,7 +126,31 @@ class EmployeeController extends Controller
      */
     public function show(Employee $employee): JsonResponse
     {
-        return $this->successResponse($employee->load('services', 'user'), 'Employee details retrieved.');
+        $employee->load('services', 'user');
+
+        $activeBooking = \App\Models\Booking::where('employee_id', $employee->id)
+            ->whereIn('status', ['in_progress', 'checked_in'])
+            ->where('end_time', '>', now())
+            ->orderBy('start_time', 'asc')
+            ->first();
+
+        $isBusy = $activeBooking !== null;
+        $remainingMinutes = 0;
+        $liveStatusDisplay = '🟢 Available Now';
+        $nextAvailableSlotTime = null;
+
+        if ($isBusy && $activeBooking) {
+            $remainingMinutes = (int) max(0, ceil(now()->diffInMinutes($activeBooking->end_time, false)));
+            $liveStatusDisplay = "✂️ Serving Client (Free in {$remainingMinutes}m)";
+            $nextAvailableSlotTime = $activeBooking->end_time->format('H:i');
+        }
+
+        $employee->is_busy = $isBusy;
+        $employee->remaining_minutes = $remainingMinutes;
+        $employee->live_status_display = $liveStatusDisplay;
+        $employee->next_available_slot_time = $nextAvailableSlotTime;
+
+        return $this->successResponse($employee, 'Employee details retrieved.');
     }
 
     /**
@@ -109,6 +165,9 @@ class EmployeeController extends Controller
             'email' => 'nullable|email|max:255',
             'phone' => 'sometimes|required|string|max:50',
             'designation' => 'nullable|string|max:255',
+            'work_start_time' => 'nullable|date_format:H:i,H:i:s',
+            'work_end_time' => 'nullable|date_format:H:i,H:i:s',
+            'max_concurrent_bookings' => 'nullable|integer|min:1|max:10',
             'status' => 'nullable|in:active,inactive',
         ]);
 

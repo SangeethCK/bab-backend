@@ -32,7 +32,15 @@ Route::prefix('v1')->group(function () {
     Route::post('/auth/forgot-password', [AuthController::class, 'forgotPassword']);
     Route::post('/auth/reset-password', [AuthController::class, 'resetPassword']);
 
-    // Authenticated Tenant Routes
+    // Public Tenant Catalog & Booking Routes (accessible to guest customers)
+    Route::middleware([EnsureTenantContext::class])->group(function () {
+        Route::get('/services', [ServiceController::class, 'index']);
+        Route::get('/employees', [EmployeeController::class, 'index']);
+        Route::get('/bookings/available-slots', [BookingController::class, 'availableSlots']);
+        Route::post('/bookings', [BookingController::class, 'store']);
+    });
+
+    // Authenticated Admin & Management Routes
     Route::middleware(['auth:sanctum', EnsureTenantContext::class])->group(function () {
         Route::post('/auth/logout', [AuthController::class, 'logout']);
         Route::get('/auth/me', [AuthController::class, 'me']);
@@ -45,20 +53,28 @@ Route::prefix('v1')->group(function () {
         Route::get('/customers/{customer}/outstanding-balance', [CustomerController::class, 'outstandingBalance']);
         Route::apiResource('customers', CustomerController::class);
 
-        // Services Catalog
-        Route::apiResource('services', ServiceController::class);
+        // Services Catalog Management
+        Route::post('/services', [ServiceController::class, 'store']);
+        Route::get('/services/{service}', [ServiceController::class, 'show']);
+        Route::put('/services/{service}', [ServiceController::class, 'update']);
+        Route::delete('/services/{service}', [ServiceController::class, 'destroy']);
 
-        // Employee Master Records & Skills Matrix
+        // Employee Master Records & Skills Matrix Management
         Route::post('/employees/{employee}/skills', [EmployeeController::class, 'syncSkills']);
-        Route::apiResource('employees', EmployeeController::class);
+        Route::post('/employees', [EmployeeController::class, 'store']);
+        Route::get('/employees/{employee}', [EmployeeController::class, 'show']);
+        Route::put('/employees/{employee}', [EmployeeController::class, 'update']);
+        Route::delete('/employees/{employee}', [EmployeeController::class, 'destroy']);
 
         // Booking Engine & Calendar Endpoints
-        Route::get('/bookings/available-slots', [BookingController::class, 'availableSlots']);
         Route::get('/bookings/calendar', [BookingController::class, 'calendar']);
         Route::patch('/bookings/{booking}/reschedule', [BookingController::class, 'reschedule']);
         Route::patch('/bookings/{booking}/status', [BookingController::class, 'updateStatus']);
         Route::post('/bookings/{booking}/cancel', [BookingController::class, 'cancel']);
-        Route::apiResource('bookings', BookingController::class);
+        Route::get('/bookings', [BookingController::class, 'index']);
+        Route::get('/bookings/{booking}', [BookingController::class, 'show']);
+        Route::put('/bookings/{booking}', [BookingController::class, 'update']);
+        Route::delete('/bookings/{booking}', [BookingController::class, 'destroy']);
 
         // Billing and Payment Endpoints
         Route::post('/invoices/{invoice}/payments', [InvoiceController::class, 'recordPayment']);

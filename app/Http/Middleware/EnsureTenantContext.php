@@ -28,8 +28,14 @@ class EnsureTenantContext
         // 2. Fallback: resolve from X-Tenant-ID header or X-Tenant-Slug
         if (!$tenant && $request->hasHeader('X-Tenant-ID')) {
             $tenant = Tenant::find($request->header('X-Tenant-ID'));
-        } elseif (!$tenant && $request->hasHeader('X-Tenant-Slug')) {
+        }
+        
+        if (!$tenant && $request->hasHeader('X-Tenant-Slug')) {
             $tenant = Tenant::where('slug', $request->header('X-Tenant-Slug'))->first();
+        }
+
+        if (!$tenant) {
+            $tenant = Tenant::where('status', 'active')->first();
         }
 
         if ($tenant) {
