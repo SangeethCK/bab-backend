@@ -35,6 +35,17 @@ class RoleAndPermissionSeeder extends Seeder
 
         foreach ($permissions as $permissionName) {
             Permission::firstOrCreate(['name' => $permissionName, 'guard_name' => 'web']);
+            Permission::firstOrCreate(['name' => $permissionName, 'guard_name' => 'sanctum']);
         }
+
+        $adminRoleWeb = Role::firstOrCreate(['name' => 'admin', 'guard_name' => 'web']);
+        $adminRoleSanctum = Role::firstOrCreate(['name' => 'admin', 'guard_name' => 'sanctum']);
+        $adminRoleWeb->syncPermissions(Permission::where('guard_name', 'web')->get());
+        $adminRoleSanctum->syncPermissions(Permission::where('guard_name', 'sanctum')->get());
+
+        Role::firstOrCreate(['name' => 'staff', 'guard_name' => 'web']);
+        Role::firstOrCreate(['name' => 'staff', 'guard_name' => 'sanctum']);
+        Role::firstOrCreate(['name' => 'customer', 'guard_name' => 'web']);
+        Role::firstOrCreate(['name' => 'customer', 'guard_name' => 'sanctum']);
     }
 }

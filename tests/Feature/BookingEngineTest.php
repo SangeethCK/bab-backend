@@ -299,4 +299,28 @@ class BookingEngineTest extends TestCase
         $res3->assertStatus(409);
         $this->assertStringContainsString('reached maximum concurrent booking capacity', $res3->json('message'));
     }
+
+    public function test_direct_status_transition_from_scheduled_to_completed_and_complete_alias(): void
+    {
+        $booking = \App\Models\Booking::create([
+            'tenant_id' => $this->tenant->id,
+            'booking_code' => 'BK-TEST-DIRECT',
+            'customer_id' => $this->customer->id,
+            'employee_id' => $this->employee->id,
+            'service_id' => $this->service->id,
+            'start_time' => now()->addHour(),
+            'end_time' => now()->addHour()->addMinutes(30),
+            'status' => 'scheduled',
+            'total_price' => 35.00,
+        ]);
+
+        // Transition directly from 'scheduled' to 'completed' using 'complete' or 'completed'
+        $response = $this->actingAs($this->user, 'sanctum')
+            ->patchJson("/api/v1/bookings/{$booking->id}/status", [
+                'status' => 'completed',
+            ]);
+
+        $response->assertStatus(200);
+        $this->assertEquals('completed', $booking->fresh()->status);
+    }
 }

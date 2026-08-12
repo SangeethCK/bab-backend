@@ -148,7 +148,7 @@ class BookingController extends Controller
     public function updateStatus(Request $request, Booking $booking): JsonResponse
     {
         $validated = $request->validate([
-            'status' => 'required|in:scheduled,checked_in,in_progress,completed,cancelled',
+            'status' => 'required|in:scheduled,checked_in,in_progress,completed,complete,cancelled',
             'cancellation_reason' => 'nullable|string',
         ]);
 

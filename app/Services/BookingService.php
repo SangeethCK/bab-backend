@@ -233,12 +233,16 @@ class BookingService
      */
     public function updateStatus(Booking $booking, string $newStatus, ?string $cancellationReason = null): Booking
     {
+        if ($newStatus === 'complete') {
+            $newStatus = 'completed';
+        }
+
         $allowedTransitions = [
-            'scheduled' => ['checked_in', 'cancelled'],
-            'checked_in' => ['in_progress', 'cancelled'],
+            'scheduled' => ['checked_in', 'in_progress', 'completed', 'cancelled'],
+            'checked_in' => ['in_progress', 'completed', 'cancelled'],
             'in_progress' => ['completed', 'cancelled'],
-            'completed' => [],
-            'cancelled' => [],
+            'completed' => ['scheduled', 'in_progress'], // Admin correction support
+            'cancelled' => ['scheduled'],
         ];
 
         if (!in_array($newStatus, $allowedTransitions[$booking->status] ?? [])) {
@@ -248,6 +252,12 @@ class BookingService
         $oldValues = $booking->toArray();
 
         $updateData = ['status' => $newStatus];
+        if ($newStatus === 'checked_in' || $newStatus === 'in_progress') {
+            $now = now();
+            $duration = $booking->service?->duration_minutes ?? 30;
+            $updateData['start_time'] = $now;
+            $updateData['end_time'] = $now->copy()->addMinutes($duration);
+        }
         if ($newStatus === 'cancelled' && $cancellationReason) {
             $updateData['cancellation_reason'] = $cancellationReason;
         }
