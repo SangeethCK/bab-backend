@@ -17,6 +17,7 @@ class Booking extends Model
         'booking_code',
         'customer_id',
         'employee_id',
+        'chair_id',
         'service_id',
         'start_time',
         'end_time',
@@ -43,6 +44,11 @@ class Booking extends Model
     public function employee(): BelongsTo
     {
         return $this->belongsTo(Employee::class);
+    }
+
+    public function chair(): BelongsTo
+    {
+        return $this->belongsTo(Chair::class);
     }
 
     public function service(): BelongsTo

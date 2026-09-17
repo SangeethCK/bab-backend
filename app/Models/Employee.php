@@ -37,4 +37,14 @@ class Employee extends Model
         return $this->belongsToMany(Service::class, 'employee_service')
             ->withPivot('custom_duration_minutes', 'custom_price');
     }
+
+    public function chairs(): \Illuminate\Database\Eloquent\Relations\HasMany
+    {
+        return $this->hasMany(Chair::class);
+    }
+
+    public function chair(): \Illuminate\Database\Eloquent\Relations\HasOne
+    {
+        return $this->hasOne(Chair::class);
+    }
 }

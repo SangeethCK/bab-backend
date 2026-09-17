@@ -26,7 +26,7 @@ class BookingController extends Controller
      */
     public function index(Request $request): JsonResponse
     {
-        $query = Booking::with('customer', 'employee', 'service');
+        $query = Booking::with('customer', 'employee', 'service', 'chair');
 
         if ($request->filled('status')) {
             $query->where('status', $request->input('status'));
@@ -34,6 +34,10 @@ class BookingController extends Controller
 
         if ($request->filled('employee_id')) {
             $query->where('employee_id', $request->input('employee_id'));
+        }
+
+        if ($request->filled('chair_id')) {
+            $query->where('chair_id', $request->input('chair_id'));
         }
 
         if ($request->filled('customer_id')) {
@@ -98,6 +102,7 @@ class BookingController extends Controller
         $validated = $request->validate([
             'customer_id' => 'required|exists:customers,id',
             'employee_id' => 'required|exists:employees,id',
+            'chair_id' => 'nullable|exists:chairs,id',
             'service_id' => 'required|exists:services,id',
             'start_time' => 'required|date',
             'total_price' => 'nullable|numeric|min:0',
@@ -117,7 +122,7 @@ class BookingController extends Controller
      */
     public function show(Booking $booking): JsonResponse
     {
-        return $this->successResponse($booking->load('customer', 'employee', 'service'), 'Booking details retrieved.');
+        return $this->successResponse($booking->load('customer', 'employee', 'service', 'chair'), 'Booking details retrieved.');
     }
 
     /**
@@ -215,7 +220,12 @@ class BookingController extends Controller
     public function calendar(Request $request): JsonResponse
     {
         $view = $request->get('view', 'daily');
-        $query = Booking::with('customer:id,name,mobile', 'employee:id,first_name,last_name', 'service:id,name,duration_minutes');
+        $query = Booking::with([
+            'customer:id,name,mobile',
+            'employee:id,first_name,last_name',
+            'service:id,name,duration_minutes',
+            'chair:id,name,chair_number',
+        ]);
 
         if ($view === 'daily') {
             $date = $request->get('date', now()->format('Y-m-d'));
@@ -237,5 +247,35 @@ class BookingController extends Controller
             'count' => $bookings->count(),
             'bookings' => $bookings,
         ], 'Calendar bookings retrieved.');
+    }
+
+    /**
+     * Update an existing booking.
+     */
+    public function update(Request $request, Booking $booking): JsonResponse
+    {
+        $validated = $request->validate([
+            'employee_id' => 'sometimes|required|exists:employees,id',
+            'chair_id' => 'nullable|exists:chairs,id',
+            'service_id' => 'sometimes|required|exists:services,id',
+            'start_time' => 'sometimes|required|date',
+            'total_price' => 'nullable|numeric|min:0',
+            'notes' => 'nullable|string',
+            'status' => 'sometimes|in:scheduled,checked_in,in_progress,completed,cancelled',
+        ]);
+
+        $booking->update($validated);
+
+        return $this->successResponse($booking->load('customer', 'employee', 'service', 'chair'), 'Booking updated successfully.');
+    }
+
+    /**
+     * Delete an existing booking.
+     */
+    public function destroy(Booking $booking): JsonResponse
+    {
+        $booking->delete();
+
+        return $this->successResponse(null, 'Booking deleted successfully.');
     }
 }

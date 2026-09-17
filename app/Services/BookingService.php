@@ -134,12 +134,14 @@ class BookingService
             }
 
             $bookingCode = Booking::generateNextBookingCode($tenantId);
+            $chairId = $data['chair_id'] ?? $employee->chair?->id;
 
             $booking = Booking::create([
                 'tenant_id' => $tenantId,
                 'booking_code' => $bookingCode,
                 'customer_id' => $data['customer_id'],
                 'employee_id' => $employee->id,
+                'chair_id' => $chairId,
                 'service_id' => $service->id,
                 'start_time' => $startTime,
                 'end_time' => $endTime,

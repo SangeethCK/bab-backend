@@ -3,6 +3,7 @@
 namespace Database\Seeders;
 
 use App\Models\Booking;
+use App\Models\Chair;
 use App\Models\Customer;
 use App\Models\Employee;
 use App\Models\Invoice;
@@ -179,6 +180,65 @@ class DemoSeeder extends Seeder
             ]
         );
 
-        // 6. Clean Booking & Financial State (Ready for fresh testing)
+        // 6. Create Barber Chairs / Stations for Visual Grid POS
+        $chair1 = Chair::firstOrCreate(
+            ['tenant_id' => $tenant1->id, 'chair_number' => 'CHAIR-01'],
+            [
+                'name' => 'Master Station 1',
+                'employee_id' => $dwight->id,
+                'status' => 'available',
+                'sort_order' => 1,
+                'is_active' => true,
+            ]
+        );
+
+        $chair2 = Chair::firstOrCreate(
+            ['tenant_id' => $tenant1->id, 'chair_number' => 'CHAIR-02'],
+            [
+                'name' => 'Stylist Chair 2',
+                'employee_id' => $sam->id,
+                'status' => 'available',
+                'sort_order' => 2,
+                'is_active' => true,
+            ]
+        );
+
+        $chair3 = Chair::firstOrCreate(
+            ['tenant_id' => $tenant1->id, 'chair_number' => 'CHAIR-03'],
+            [
+                'name' => 'Beard Lounge',
+                'employee_id' => $alex->id,
+                'status' => 'available',
+                'sort_order' => 3,
+                'is_active' => true,
+            ]
+        );
+
+        $chair4 = Chair::firstOrCreate(
+            ['tenant_id' => $tenant1->id, 'chair_number' => 'CHAIR-04'],
+            [
+                'name' => 'VIP Suite',
+                'employee_id' => null,
+                'status' => 'available',
+                'sort_order' => 4,
+                'is_active' => true,
+            ]
+        );
+
+        // Sample Active Booking on Chair 1 for immediate live POS visualization
+        Booking::firstOrCreate(
+            ['booking_code' => 'BKG-DEMO-01', 'tenant_id' => $tenant1->id],
+            [
+                'customer_id' => $cust1->id,
+                'employee_id' => $dwight->id,
+                'chair_id' => $chair1->id,
+                'service_id' => $combo->id,
+                'start_time' => now()->subMinutes(15),
+                'end_time' => now()->addMinutes(45),
+                'status' => 'in_progress',
+                'total_price' => $combo->price,
+                'notes' => 'Walk-in VIP client on Chair 1',
+            ]
+        );
     }
 }

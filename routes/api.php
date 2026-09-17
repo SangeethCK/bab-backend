@@ -3,6 +3,7 @@
 use App\Http\Controllers\Api\V1\AuthController;
 use App\Http\Controllers\Api\V1\AuditLogController;
 use App\Http\Controllers\Api\V1\BookingController;
+use App\Http\Controllers\Api\V1\ChairController;
 use App\Http\Controllers\Api\V1\CustomerController;
 use App\Http\Controllers\Api\V1\DailyClosingController;
 use App\Http\Controllers\Api\V1\DashboardController;
@@ -36,6 +37,7 @@ Route::prefix('v1')->group(function () {
     Route::middleware([EnsureTenantContext::class])->group(function () {
         Route::get('/services', [ServiceController::class, 'index']);
         Route::get('/employees', [EmployeeController::class, 'index']);
+        Route::get('/chairs', [ChairController::class, 'index']);
         Route::get('/bookings/available-slots', [BookingController::class, 'availableSlots']);
         Route::post('/bookings', [BookingController::class, 'store']);
     });
@@ -47,6 +49,11 @@ Route::prefix('v1')->group(function () {
 
         Route::get('/tenant', [TenantController::class, 'show']);
         Route::get('/audit-logs', [AuditLogController::class, 'index']);
+
+        // Chairs / Barber Stations & POS Visual Grid
+        Route::get('/chairs/dashboard', [ChairController::class, 'dashboard']);
+        Route::post('/chairs/{chair}/assign-employee', [ChairController::class, 'assignEmployee']);
+        Route::apiResource('chairs', ChairController::class);
 
         // Customer Catalog & History
         Route::get('/customers/{customer}/history', [CustomerController::class, 'history']);
