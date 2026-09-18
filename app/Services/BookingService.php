@@ -103,19 +103,26 @@ class BookingService
             $startTime = Carbon::parse($data['start_time']);
             $endTime = $startTime->copy()->addMinutes($duration);
 
-            // Employee Working Hours / Shift Check (timezone-aware)
-            $tz = $startTime->getTimezone();
-            $dateStr = $startTime->format('Y-m-d');
-            $workStartStr = $employee->work_start_time ?? '08:00:00';
-            $workEndStr = $employee->work_end_time ?? '21:00:00';
+            $status = $data['status'] ?? 'scheduled';
+            if ($status === 'in_progress') {
+                $now = now();
+                $startTime = $now;
+                $endTime = $now->copy()->addMinutes($duration);
+            } else {
+                // Employee Working Hours / Shift Check (timezone-aware)
+                $tz = $startTime->getTimezone();
+                $dateStr = $startTime->format('Y-m-d');
+                $workStartStr = $employee->work_start_time ?? '08:00:00';
+                $workEndStr = $employee->work_end_time ?? '21:00:00';
 
-            $shiftStart = Carbon::parse("{$dateStr} {$workStartStr}", $tz);
-            $shiftEnd = Carbon::parse("{$dateStr} {$workEndStr}", $tz);
+                $shiftStart = Carbon::parse("{$dateStr} {$workStartStr}", $tz);
+                $shiftEnd = Carbon::parse("{$dateStr} {$workEndStr}", $tz);
 
-            if ($startTime->lt($shiftStart) || $endTime->gt($shiftEnd)) {
-                $formattedWorkStart = Carbon::parse($workStartStr)->format('H:i');
-                $formattedWorkEnd = Carbon::parse($workEndStr)->format('H:i');
-                throw new \InvalidArgumentException("Requested booking time is outside employee working hours ({$formattedWorkStart} - {$formattedWorkEnd}).");
+                if ($startTime->lt($shiftStart) || $endTime->gt($shiftEnd)) {
+                    $formattedWorkStart = Carbon::parse($workStartStr)->format('H:i');
+                    $formattedWorkEnd = Carbon::parse($workEndStr)->format('H:i');
+                    throw new \InvalidArgumentException("Requested booking time is outside employee working hours ({$formattedWorkStart} - {$formattedWorkEnd}).");
+                }
             }
 
             // Capacity Check: Pessimistic Lock & Max Concurrent Capacity Validation
@@ -145,7 +152,7 @@ class BookingService
                 'service_id' => $service->id,
                 'start_time' => $startTime,
                 'end_time' => $endTime,
-                'status' => 'scheduled',
+                'status' => $status,
                 'total_price' => $totalPrice,
                 'notes' => $data['notes'] ?? null,
             ]);

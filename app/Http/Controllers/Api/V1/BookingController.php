@@ -105,6 +105,7 @@ class BookingController extends Controller
             'chair_id' => 'nullable|exists:chairs,id',
             'service_id' => 'required|exists:services,id',
             'start_time' => 'required|date',
+            'status' => 'nullable|string|in:scheduled,checked_in,in_progress',
             'total_price' => 'nullable|numeric|min:0',
             'notes' => 'nullable|string',
         ]);

@@ -83,12 +83,25 @@ class ReportService
 
         $totalSales = (float) $payments->sum('amount');
 
+        $expenses = Expense::with('user:id,name')
+            ->whereBetween('expense_date', ["{$startDate} 00:00:00", "{$endDate} 23:59:59"])
+            ->orderBy('expense_date', 'desc')
+            ->get();
+
+        $cashExpenses = (float) $expenses->where('payment_method', 'cash')->sum('amount');
+        $cashIn = (float) $payments->where('payment_method', 'cash')->sum('amount');
+        $dailyRegisterBalance = round($cashIn - $cashExpenses, 2);
+
         return [
             'start_date' => $startDate,
             'end_date' => $endDate,
             'total_sales' => $totalSales,
             'payment_method_breakdown' => $byPaymentMethod,
             'transactions' => $payments,
+            'expenses' => $expenses,
+            'cash_in' => $cashIn,
+            'cash_out' => $cashExpenses,
+            'daily_register_balance' => $dailyRegisterBalance,
         ];
     }
 
